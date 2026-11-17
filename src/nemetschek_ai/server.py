@@ -47,11 +47,23 @@ def _guid(e: dict) -> str:
     return e["elementId"]["guid"]
 
 
-def _resolve_property(name: str) -> tuple[dict | None, dict]:
-    """Returns (propertyMatch, rawResult). propertyMatch only when unambiguous (found, one property)."""
+def _resolve_property(name: str, group_hint: str = "Door") -> tuple[dict | None, dict]:
+    """Returns (propertyMatch, rawResult). propertyMatch only when unambiguous.
+    name may be 'Group / Name' to pick the group explicitly. When the same name exists in several
+    groups (Archicad has 'Fire Rating' in both Window/Door and Skylight), the group containing
+    group_hint wins if exactly one does."""
+    group = None
+    if "/" in name and not name.strip().startswith("/"):
+        group, _, name = (p.strip() for p in name.rpartition("/"))
     res = ac.resolve([{"name": name, "kind": "Property"}])[0]
     found = [m for m in res.get("found", []) if m.get("propertyId")]
-    if res["status"] == "found" and len(found) == 1:
+    if group:
+        found = [m for m in found if (m.get("propertyGroupName") or "").lower() == group.lower()]
+    elif len(found) > 1 and group_hint:
+        hinted = [m for m in found if group_hint.lower() in (m.get("propertyGroupName") or "").lower()]
+        if len(hinted) == 1:
+            found = hinted
+    if len(found) == 1:
         return found[0], res
     return None, res
 
@@ -170,6 +182,7 @@ def inspect_doors(door_guids: list[str], property_name: str = "Fire Rating") -> 
     host_det = {(_guid(h)): hd for h, hd in zip(host_list, ac.details(host_list, ["details"]))}
     host_val = {(_guid(h)): hv[0] for h, hv in zip(host_list, ac.property_values(host_list, [prop["propertyId"]]))}
     comp_names = _composite_names([hd.get("details", {}).get("compositeId") for hd in host_det.values()])
+    mat_names = _material_names([hd.get("details", {}).get("buildingMaterialId") for hd in host_det.values()])
     eids = ac.property_values(doors, [_element_id_prop()])
     rows, by_type = [], defaultdict(lambda: {"count": 0, "hostWalls": Counter(), "hostRatings": Counter()})
     for g, d, h, e in zip(door_guids, det, hosts, eids):
@@ -184,7 +197,7 @@ def inspect_doors(door_guids: list[str], property_name: str = "Fire Rating") -> 
         }
         if h:
             hd = host_det.get(_guid(h), {}).get("details", {})
-            wall = _wall_label(hd, comp_names)
+            wall = _wall_label(hd, comp_names, mat_names)
             row.update({"hostWall": wall, "hostThickness_mm": _mm(hd.get("begThickness")), "hostWallRating": (host_val.get(_guid(h)) or {}).get("value") or ""})
         else:
             wall = "(no host wall)"
@@ -397,13 +410,8 @@ def _material_names(ids: list) -> dict:
     if not uniq:
         return {}
     try:
-        r = ac.command("API.GetBuildingMaterialAttributes", {"attributeIds": [{"attributeId": i} for i in uniq]})
-        out = {}
-        for i, a in zip(uniq, r.get("attributes", [])):
-            bm = a.get("buildingMaterialAttribute") or {}
-            if bm.get("name"):
-                out[i["guid"]] = bm["name"]
-        return out
+        r = ac.tapir("GetBuildingMaterials", {"attributeIds": [{"attributeId": i} for i in uniq], "fields": ["name"]})
+        return {i["guid"]: b["name"] for i, b in zip(uniq, r.get("buildingMaterials", [])) if b.get("name")}
     except ArchicadError:
         return {}
 

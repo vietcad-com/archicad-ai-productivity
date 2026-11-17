@@ -71,7 +71,17 @@ class Archicad:
         return res
 
     # -- helpers ---------------------------------------------------------------
+    MODEL_WINDOWS = {"FloorPlan", "3DModel", "Section", "Elevation", "InteriorElevation"}
+
+    def ensure_model_window(self) -> None:
+        """Tapir lists elements of the current window's database; a worksheet or layout has no walls.
+        Switch to the floor plan when the user is on a view that is not a model view."""
+        cur = self.tapir("GetCurrentWindowType").get("currentWindowType")
+        if cur not in self.MODEL_WINDOWS:
+            self.tapir("ChangeWindow", {"windowType": "FloorPlan"})
+
     def elements_by_type(self, element_type: str) -> list[dict]:
+        self.ensure_model_window()
         r = self.tapir("GetElementsByType", {"elementType": element_type})
         if "error" in r:
             raise ArchicadError(f"GetElementsByType {element_type}: {r['error']}")
