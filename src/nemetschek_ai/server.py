@@ -36,7 +36,24 @@ mcp = MCPServer("nemetschek-ai", instructions=INSTRUCTIONS)
 ac = Archicad()
 
 OUT_DIR = Path(os.environ.get("NEMETSCHEK_AI_OUT", Path.home() / "Documents" / "nemetschek-ai"))
-_plans: dict[str, dict] = {}  # preview token -> plan (Part 1 confirm step)
+PLAN_TTL_S = 30 * 60  # a preview can be applied for 30 minutes, once
+_PLAN_DIR = OUT_DIR / ".previews"
+
+
+def _save_plan(token: str, plan: dict) -> None:
+    """Previews are kept on disk so a confirmation still works when the AI client restarts the
+    server between turns (Claude Code starts one server per session)."""
+    _PLAN_DIR.mkdir(parents=True, exist_ok=True)
+    (_PLAN_DIR / f"{token}.json").write_text(json.dumps({**plan, "ts": time.time()}))
+
+
+def _take_plan(token: str) -> dict | None:
+    f = _PLAN_DIR / f"{''.join(c for c in token if c.isalnum())}.json"
+    if not f.exists():
+        return None
+    plan = json.loads(f.read_text())
+    f.unlink()  # one use only
+    return plan if time.time() - plan.get("ts", 0) <= PLAN_TTL_S else None
 _last_takeoff: dict = {}
 
 
@@ -259,7 +276,7 @@ def preview_property_update(assignments: list[dict], property_name: str = "Fire 
         wc = res.get("wouldChange") or {}
         table.append({"elementId": e[0]["value"], "guid": a["guid"], "old": wc.get("oldValue", ""), "new": wc.get("newValue", a["value"])})
     token = hashlib.sha1(json.dumps(items, sort_keys=True).encode()).hexdigest()[:10]
-    _plans[token] = {"items": items, "property": prop, "propertyName": property_name, "created": dt.datetime.now().isoformat(timespec="seconds")}
+    _save_plan(token, {"items": items, "property": prop, "propertyName": property_name, "created": dt.datetime.now().isoformat(timespec="seconds")})
     return {
         "dryRun": True,
         "property": _prop_label(prop),
@@ -278,9 +295,9 @@ def apply_property_update(token: str) -> dict:
     """FIX step. Writes exactly the previewed plan (by token) in one batch (one undo step in Archicad),
     then re-counts the doors that are still missing the property. Only call after the user confirmed."""
     t = _now()
-    plan = _plans.pop(token, None)
+    plan = _take_plan(token)
     if not plan:
-        return {"error": "Unknown or already used token. Run preview_property_update again."}
+        return {"error": "Unknown, expired (30 min) or already used token. Run preview_property_update again and show it to the user."}
     r = ac.tapir("SetPropertyValuesOfElements", {"elementPropertyValues": plan["items"]})
     res = r.get("executionResults", [])
     ok = sum(1 for x in res if x.get("success", True) and "error" not in x)

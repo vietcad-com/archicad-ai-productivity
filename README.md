@@ -2,10 +2,10 @@
 
 # Archicad AI Productivity Tools
 
-**Ask an AI to fix your model's fire ratings and price your walls, in plain language, in Archicad.**
+**Use plain language to ask an AI to correct fire ratings and estimate wall costs in Archicad.**
 
-An MCP server that connects Claude (or any MCP client) to Archicad through the free [Tapir](https://github.com/ENZYME-APD/tapir-archicad-automation) add-on.
-Built for the **Nemetschek Design AI Productivity Challenge 2027**.
+This software connection, called an MCP server, links Claude (or any MCP client) to Archicad through the free [Tapir](https://github.com/ENZYME-APD/tapir-archicad-automation) add-on.
+Created for the **Nemetschek Design AI Productivity Challenge 2027**.
 
 ![Archicad 27–30](https://img.shields.io/badge/Archicad-27%E2%80%9330-0098da)
 ![Tapir 2.0](https://img.shields.io/badge/Tapir-2.0-2a9d5c)
@@ -25,21 +25,21 @@ Built for the **Nemetschek Design AI Productivity Challenge 2027**.
 
 | | Task | Before | With the AI |
 |---|---|---|---|
-| 🚪 | **Fire ratings.** Find every door with an empty Fire Rating, check door types and host walls, apply a rule in one batch. | Open each door's settings, storey by storey | One conversation, about 1 minute |
-| 🧱 | **Wall cost estimate.** Measure every wall by type and price it with your rates, low / mid / high, in Excel. | Manual take-off and spreadsheet work | One prompt, a few seconds of compute |
+| 🚪 | **Fire ratings.** Find every door with an empty Fire Rating. Check door types and the walls that contain them, then apply a rule to all of them at once. | Open each door's settings, storey by storey | One conversation, 75 s in the demo |
+| 🧱 | **Wall cost estimate.** Measure every wall by type. Use your rates to produce low / mid / high estimates in Excel. | Manual take-off and spreadsheet work | One request, a few seconds of processing |
 
-On the Villa Patio sample project (3 storeys, 387 walls, 24 doors): finding and checking all 24 doors takes **0.2 s**,
-the batch write **0.5 s**, measuring all 387 walls **1 s** and pricing them **0.6 s**. The rest of the time is the conversation.
+On the Villa Patio sample project (3 storeys, 387 walls, 24 doors), finding and checking all 24 doors takes **0.2 s**.
+Applying the ratings takes **0.5 s**. Measuring all 387 walls takes **1 s**, and pricing them takes **0.6 s**. The remaining time is spent in conversation with the AI.
 
-## Safe by design
+## How changes are controlled
 
-The rules are enforced in code, not only in the prompt:
+The software enforces these rules. They do not depend only on instructions given to the AI:
 
-- **Preview before every change.** Writes go through Tapir's `dryRun` first. The AI shows *old → new* for every door and gets a one-time token.
-- **Nothing is written without your OK.** Only `apply_property_update(token)` writes, and only exactly what was previewed. Each token works once.
-- **Property values only.** Nothing is created, moved or deleted. The whole batch is a single **Edit › Undo** step.
-- **Wall costing is read-only.** It measures, it never edits.
-- **No guessed names.** Words like "fire rating" or "ground floor" are checked against the project with `ResolveNames` before use.
+- **Preview before every change.** Tapir's `dryRun` checks proposed changes first. The AI shows *old → new* values for every door and receives a token that can be used once.
+- **Your approval is required.** Only `apply_property_update(token)` can apply changes. It applies exactly what you previewed. Each token works once.
+- **Only property values change.** Nothing is created, moved or deleted. You can reverse the whole batch with a single **Edit › Undo** step.
+- **Wall costing is read-only.** It measures walls without editing them.
+- **Names are checked.** Before using words such as "fire rating" or "ground floor", `ResolveNames` checks them against the project.
 
 ## How it works
 
@@ -54,15 +54,15 @@ flowchart LR
 
 | Tool | Step | Changes the model? |
 |---|---|---|
-| `project_overview` | Storeys with door and wall counts | No |
-| `resolve_names` | Check the user's words against real project names | No |
-| `find_doors_missing_property` | **Find**: doors with an empty Fire Rating, per storey | No |
-| `inspect_doors` | **Check**: door type, size, host wall type, thickness and rating | No |
-| `show_in_archicad` | Highlight and zoom to elements (red = to fix, green = fixed) | No (display only) |
-| `preview_property_update` | **Preview**: dry run, old → new, returns a token | No |
-| `apply_property_update` | **Fix**: write exactly the previewed plan, recount | Property values only |
-| `wall_takeoff` | Length, height, net/gross area, volume per wall type | No |
-| `price_walls` | Low/mid/high cost per wall type, Excel with assumptions | No |
+| `project_overview` | List storeys with door and wall counts | No |
+| `resolve_names` | Check the user's words against names in the project | No |
+| `find_doors_missing_property` | **Find**: list doors with an empty Fire Rating, by storey | No |
+| `inspect_doors` | **Check**: inspect door type and size, plus the host wall's type, thickness and rating | No |
+| `show_in_archicad` | Highlight elements and zoom to them (red = to fix, green = fixed) | No (display only) |
+| `preview_property_update` | **Preview**: check proposed changes without applying them, show old → new values and return a token | No |
+| `apply_property_update` | **Fix**: apply exactly the previewed changes, then count again | Property values only |
+| `wall_takeoff` | Measure length, height, net/gross area and volume by wall type | No |
+| `price_walls` | Calculate low/mid/high costs by wall type and export to Excel with assumptions | No |
 
 ## Quick start
 
@@ -81,11 +81,11 @@ Then ask:
 
 > Price every wall by type. 300 mm walls 46 USD/m², 150 mm 28, glass 180/220/260. Net area, ±15 %. Export to Excel.
 
-Full setup, including Claude Desktop, is in [INSTALL.md](INSTALL.md).
+See [INSTALL.md](INSTALL.md) for full setup instructions, including Claude Desktop.
 
 ## Reproduce the demo
 
-[`demo/demo.py`](demo/demo.py) runs the four prompts of the demo video as real Claude Code sessions against the open project and records the screen with ffmpeg.
+[`demo/demo.py`](demo/demo.py) runs the demo video's four prompts in real Claude Code sessions using the open project. It records the screen with ffmpeg.
 
 ## Project layout
 
@@ -99,8 +99,8 @@ docs/          one-page summary, demo GIF
 
 ## Credits
 
-- [Tapir](https://github.com/ENZYME-APD/tapir-archicad-automation) by ENZYME APD and contributors: the Archicad add-on this builds on.
+- [Tapir](https://github.com/ENZYME-APD/tapir-archicad-automation) by ENZYME APD and contributors: the Archicad add-on used by these tools.
 - [Model Context Protocol](https://modelcontextprotocol.io) Python SDK.
 - Villa Patio sample project © Graphisoft / enzyme apd.
 
-Made by [VietCAD](https://vietcad.com), a Nemetschek partner in Vietnam. MIT licensed.
+Made by [VietCAD](https://vietcad.com), a Nemetschek partner in Vietnam. Available under the MIT licence.
