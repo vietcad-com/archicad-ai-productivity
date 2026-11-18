@@ -15,7 +15,7 @@ Created for the **Nemetschek Design AI Productivity Challenge 2027**.
 
 <img src="docs/demo.gif" alt="Claude finds the doors with no fire rating, shows them in red in Archicad, previews and applies the fix, then prices every wall" width="900">
 
-[▶ Watch the 3-minute demo](https://github.com/vietcad-com/archicad-ai-productivity/releases/latest) · [Install](INSTALL.md) · [One-page summary](docs/summary.pdf)
+[▶ Demo: Claude Code](https://github.com/vietcad-com/archicad-ai-productivity/releases/download/v1.0.0/archicad-ai-demo.mp4) · [▶ Demo: Claude Desktop app](https://github.com/vietcad-com/archicad-ai-productivity/releases/download/v1.0.0/archicad-ai-demo-claude-desktop.mp4) · [Install](INSTALL.md) · [One-page summary](docs/summary.pdf)
 
 </div>
 
