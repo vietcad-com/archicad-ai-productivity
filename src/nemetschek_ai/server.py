@@ -27,6 +27,7 @@ You drive Archicad through these tools. Rules:
   will apply -> preview_property_update -> show the preview table and WAIT for the user's explicit
   confirmation -> apply_property_update with the token. Never apply without a confirmation.
   Only property values may change; never create, move or delete elements.
+- Use show_in_archicad to let the user see what you found (red = needs attention, green = fixed).
 - Part 2 (wall costs) is read-only: wall_takeoff -> agree the rates and assumptions with the
   user (heights, hidden layers, exclusions) -> price_walls. Always list the assumptions.
 """
@@ -107,6 +108,31 @@ def resolve_names(names: list[str], kind: str | None = None) -> list[dict]:
     return out
 
 
+_COLORS = {"red": [230, 57, 70, 255], "green": [42, 157, 92, 255], "amber": [244, 162, 97, 255], "blue": [69, 123, 157, 255]}
+
+
+@mcp.tool()
+def show_in_archicad(guids: list[str], color: str = "red", story_index: int | None = None, zoom: bool = True) -> dict:
+    """Show elements to the user in Archicad: highlight them in a color (red, green, amber, blue) on the
+    floor plan of the given story and zoom to them. An empty list clears all highlights.
+    Display only: the model is not changed."""
+    els = [{"elementId": {"guid": g}} for g in guids]
+    if story_index is not None:
+        ac.tapir("ChangeWindow", {"windowType": "FloorPlan", "storyIndex": int(story_index)})
+    else:
+        ac.ensure_model_window()
+    rgba = _COLORS.get(color, _COLORS["red"])
+    ac.tapir("HighlightElements", {"elements": els, "highlightedColors": [rgba] * len(els), "nonHighlightedColor": [200, 200, 200, 120]})
+    zoomed = False
+    if els and zoom:
+        try:
+            ac.tapir("ZoomToElements", {"elements": els})
+            zoomed = True
+        except ArchicadError:
+            pass  # elements on another story
+    return {"highlighted": len(els), "color": color, "zoomed": zoomed}
+
+
 # ---------------------------------------------------------------------------------------------
 # Part 1: doors with a missing fire rating
 # ---------------------------------------------------------------------------------------------
@@ -137,6 +163,7 @@ def find_doors_missing_property(property_name: str = "Fire Rating") -> dict:
                 "guid": _guid(e),
                 "elementId": eid["value"],
                 "story": st,
+                "storyIndex": int(d.get("floorIndex", 0)),
                 "doorType": (d.get("details") or {}).get("libPart", {}).get("name"),
             })
     table = [{"story": s, "doors": per_story_total[s], "missingRating": per_story_missing[s]} for s in per_story_total]
